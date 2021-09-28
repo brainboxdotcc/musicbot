@@ -10,76 +10,9 @@
 #include <mpg123.h>
 #include <out123.h>
 
+#include <musicbot/musicbot.h>
+
 using json = nlohmann::json;
-
-
-static bool match(const char* str, const char* mask)
-{
-	char* cp = NULL;
-	char* mp = NULL;
-	char* string = (char*)str;
-	char* wild = (char*)mask;
-
-	while ((*string) && (*wild != '*')) {
-		if ((tolower(*wild) != tolower(*string)) && (*wild != '?')) {
-			return 0;
-		}
-		wild++;
-		string++;
-	}
-
-	while (*string) {
-		if (*wild == '*') {
-			if (!*++wild) {
-				return 1;
-			}
-			mp = wild;
-			cp = string+1;
-		}
-		else {
-			if ((tolower(*wild) == tolower(*string)) || (*wild == '?')) {
-				wild++;
-				string++;
-			} else {
-				wild = mp;
-				string = cp++;
-			}
-		}
-	}
-
-	while (*wild == '*') {
-		wild++;
-	}
-
-	return !*wild;
-}
-
-/**
- *  trim from end of string (right)
- */
-inline std::string rtrim(std::string s)
-{
-	s.erase(s.find_last_not_of(" \t\n\r\f\v") + 1);
-	return s;
-}
-
-/**
- * trim from beginning of string (left)
- */
-inline std::string ltrim(std::string s)
-{
-	s.erase(0, s.find_first_not_of(" \t\n\r\f\v"));
-	return s;
-}
-
-/**
- * trim from both ends of string (right then left)
- */
-inline std::string trim(std::string s)
-{
-	return ltrim(rtrim(s));
-}
-
 
 std::string song_to_load = "";
 dpp::snowflake last_ch_id = 0;
@@ -187,6 +120,8 @@ int main(int argc, char const *argv[])
         std::ifstream configfile("../config.json");
         configfile >> configdocument;
         dpp::cluster bot(configdocument["token"]);
+
+	chdir(configdocument["homedir"].get<std::string>().c_str());
 
 	/* Use the on_message_create event to look for commands */
 	bot.on_message_create([&bot](const dpp::message_create_t & event) {
@@ -315,7 +250,7 @@ int main(int argc, char const *argv[])
 
 	bot.on_log([](const dpp::log_t & event) {
 		if (event.severity > dpp::ll_trace) {
-			std::cout << event.message << "\n";
+			std::cout << "[" << dpp::utility::loglevel(event.severity) << "] " << event.message << "\n";
 		}
 	});
 
