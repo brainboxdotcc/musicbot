@@ -31,3 +31,6 @@ inline std::string trim(std::string s)
 
 void good_embed(dpp::cluster &bot, dpp::snowflake channel_id, const std::string &message);
 void bad_embed(dpp::cluster &bot, dpp::snowflake channel_id, const std::string &message);
+void good_embed(dpp::commandhandler &ch, dpp::command_source src,  const std::string &message);
+void bad_embed(dpp::commandhandler &ch, dpp::command_source src, const std::string &message);
+

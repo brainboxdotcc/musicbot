@@ -57,8 +57,14 @@ std::vector<uint8_t> get_song(std::string file)
 
 std::string current_song;
 
-void start_play(dpp::discord_voice_client* v, dpp::cluster &bot)
+void start_play(dpp::discord_voice_client* v, dpp::cluster &bot, dpp::commandhandler* ch = nullptr, dpp::command_source* src = nullptr)
 {
+	dpp::command_source s;
+	bool command = false;
+	if (ch && src) {
+		command = true;
+		s = *src;
+	}
 	std::ifstream file("songindex.txt");
 	std::string search = song_to_load;
 	std::string load_this;
@@ -75,9 +81,12 @@ void start_play(dpp::discord_voice_client* v, dpp::cluster &bot)
 		file.close();
 	}
 	if (load_this.empty()) {
-		bot.message_create(dpp::message(last_ch_id, "No songs that match: " + song_to_load));
+		if (command)
+			bad_embed(*ch, s, "⚠️ No songs that match: " + song_to_load);
+		else
+			bad_embed(bot, last_ch_id, "⚠️ No songs that match: " + song_to_load);
 	} else {
-		auto t = std::thread([&bot, v, load_this]() {
+		auto t = std::thread([&bot, v, load_this, ch, command, s]() {
 			char filename_part[1024];
 			strncpy(filename_part, load_this.c_str(), 1023);
 			for (char* v = filename_part; *v; ++v) {
@@ -86,7 +95,10 @@ void start_play(dpp::discord_voice_client* v, dpp::cluster &bot)
 				}
 			}
 			filename_part[load_this.length() - 4] = '\0';
-			bot.message_create(dpp::message(last_ch_id, "Enqueued: " + std::string(basename(filename_part))));
+			if (command)
+				good_embed(*ch, s, "⌛ Enqueued: " + std::string(basename(filename_part)));
+			else
+				good_embed(bot, last_ch_id, "⌛ Enqueued: " + std::string(basename(filename_part)));
 			bot.log(dpp::ll_info, fmt::format("Begin mp3 decode of file: {}", std::string(basename(filename_part))));
 			double mp3_start = dpp::utility::time_f();
 			std::vector<uint8_t> pcmdata = get_song(load_this);
@@ -121,123 +133,161 @@ int main(int argc, char const *argv[])
         configfile >> configdocument;
         dpp::cluster bot(configdocument["token"]);
 
+	dpp::snowflake home_server = std::stoull(configdocument["homeserver"].get<std::string>());
+
 	chdir(configdocument["homedir"].get<std::string>().c_str());
 
-	/* Use the on_message_create event to look for commands */
-	bot.on_message_create([&bot](const dpp::message_create_t & event) {
-		std::stringstream ss(event.msg->content);
-		std::string command;
-		ss >> command;
+	dpp::commandhandler command_handler(&bot);
+	command_handler.add_prefix(".").add_prefix("/");
 
-		if (command == ".queue") {
-			std::string resp = "__**Current Queue:**__\n\n";
-			bool any = false;
-			dpp::voiceconn* v = event.from->get_voice(event.msg->guild_id);
-			if (v && v->voiceclient && v->voiceclient->is_ready()) {
-				std::vector<std::string> songqueue = v->voiceclient->get_marker_metadata();
-				for (auto & s : songqueue) {
-					any = true;
-					if (resp.length() < 2048) {
-						resp += "🎵 " + s + "\n";
-					} else {
-						break;
-					}
-				}
-			}
-			if (!any) {
-				bot.message_create(dpp::message(event.msg->channel_id, "The queue is empty, fool. Play something!"));
-			} else {
-				bot.message_create(dpp::message(event.msg->channel_id, resp), [&](const dpp::confirmation_callback_t &callback) {
-					if (callback.is_error()) {
-						bot.log(dpp::ll_error, fmt::format("Failed to send message: {}", callback.http_info.body));
-					}
-				});
-			}
-		}
-		
-		if (command == ".search") {
-			std::string search;
-			std::getline(ss, search);
-			search = trim(search);
-			std::string matches = "__**Search Results:**__\n\n";
-			
-			std::ifstream file("songindex.txt");
-			std::replace(search.begin(), search.end(), ' ', '*');
-			search = "*" + search + "*";
-			bool found_any = false;
-			if (file.is_open()) {
-				std::string line;
-				bot.log(dpp::ll_debug, fmt::format("Searching for: '{}'", search));
-				while (std::getline(file, line)) {
-					if (match(line.c_str(), search.c_str())) {
-						bot.log(dpp::ll_debug, fmt::format("Search match: {}", line));
-						char filename_part[1024];
-						strncpy(filename_part, line.c_str(), 1023);
-						for (char* v = filename_part; *v; ++v) {
-							if (*v == '_') {
-								*v = ' ';
-							}
-						}
-						filename_part[line.length() - 4] = '\0';
-						if (matches.length() < 2048) {
-							matches += "🎵 " + std::string(basename(filename_part)) + "\n";
+	bot.on_ready([&](const dpp::ready_t &event) {
+		command_handler.add_command(
+			"queue",
+			{ },
+			[&](const std::string& command, const dpp::parameter_list_t& parameters, dpp::command_source src) {
+				std::string resp = "__**Current Queue:**__\n\n";
+				bool any = false;
+				dpp::voiceconn* v = bot.get_shard(0)->get_voice(src.guild_id);
+				if (v && v->voiceclient && v->voiceclient->is_ready()) {
+					std::vector<std::string> songqueue = v->voiceclient->get_marker_metadata();
+					for (auto & s : songqueue) {
+						any = true;
+						if (resp.length() < 2048) {
+							resp += "🎵 " + s + "\n";
 						} else {
 							break;
 						}
-						found_any = true;
 					}
 				}
-				file.close();
-			}
-			if (!found_any) {
-				bot.message_create(dpp::message(event.msg->channel_id, "I don't have any songs at all that look like that."));
-			} else {
-				bot.message_create(dpp::message(event.msg->channel_id, matches), [&](const dpp::confirmation_callback_t &callback) {
-					if (callback.is_error()) {
-						bot.log(dpp::ll_error, fmt::format("Failed to send message: {}", callback.http_info.body));
-					}
-				});
-			}
-		}
-
-		if (command == ".np") {
-			dpp::voiceconn* v = event.from->get_voice(event.msg->guild_id);
-			if (v && v->voiceclient && v->voiceclient->is_ready() && v->voiceclient->get_tracks_remaining() > 0) {
-				bot.message_create(dpp::message(event.msg->channel_id, "Currently playing: " + current_song));
-			} else {
-				bot.message_create(dpp::message(event.msg->channel_id, "...No sounds here except crickets... 🦗\nPerhaps play something with **.play**?"));
-			}
-		}
-
-		if (command == ".skip") {
-			dpp::voiceconn* v = event.from->get_voice(event.msg->guild_id);
-			if (v && v->voiceclient && v->voiceclient->is_ready() && v->voiceclient->get_tracks_remaining() > 1) {
-				bot.message_create(dpp::message(event.msg->channel_id, "Skipping..."));
-				v->voiceclient->skip_to_next_marker();
-			} else {
-				bot.message_create(dpp::message(event.msg->channel_id, "There's nothing to skip to!"));
-			}
-		}
-
-		if (command == ".play") {
-			std::getline(ss, song_to_load);
-			song_to_load = trim(song_to_load);
-			last_ch_id = event.msg->channel_id;
-			dpp::voiceconn* v = event.from->get_voice(event.msg->guild_id);
-			if (v && v->voiceclient && v->voiceclient->is_ready()) {
-				start_play(v->voiceclient, bot);
-			} else {
-				dpp::guild * g = dpp::find_guild(event.msg->guild_id);
-				if (!g->connect_member_voice(event.msg->author->id)) {
-					bot.message_create(dpp::message(event.msg->channel_id, "You don't seem to be on a voice channel! :("));
+				if (!any) {
+					bad_embed(command_handler, src, "⚠️ The queue is empty, fool. Play something!");
+				} else {
+					good_embed(command_handler, src, resp);
 				}
-			}
-		}
+			},
+			"Show music queue",
+			home_server
+		);
+
+		command_handler.add_command(
+			"np",
+			{ },
+			[&](const std::string& command, const dpp::parameter_list_t& parameters, dpp::command_source src) {
+				dpp::voiceconn* v = bot.get_shard(0)->get_voice(src.guild_id);
+				if (v && v->voiceclient && v->voiceclient->is_ready() && v->voiceclient->get_tracks_remaining() > 0) {
+					good_embed(command_handler, src, "⏯️ Currently playing: " + current_song);
+				} else {
+					bad_embed(command_handler, src, "...No sounds here except crickets... 🦗\nPerhaps play something with **.play**?");
+				}
+			},
+			"Show currently playing song",
+			home_server
+		);
+
+		command_handler.add_command(
+			"skip",
+			{ },
+			[&](const std::string& command, const dpp::parameter_list_t& parameters, dpp::command_source src) {
+				dpp::voiceconn* v = bot.get_shard(0)->get_voice(src.guild_id);
+				if (v && v->voiceclient && v->voiceclient->is_ready() && v->voiceclient->get_tracks_remaining() > 1) {
+					good_embed(command_handler, src, "⏯️ Skipping...");
+					v->voiceclient->skip_to_next_marker();
+				} else {
+					bad_embed(command_handler, src, "⚠️ There's nothing to skip to!");
+				}
+			},
+			"Skip to the next song in the queue",
+			home_server
+		);
+
+		command_handler.add_command(
+			"stop",
+			{ },
+			[&](const std::string& command, const dpp::parameter_list_t& parameters, dpp::command_source src) {
+				dpp::voiceconn* v = bot.get_shard(0)->get_voice(src.guild_id);
+				if (v && v->voiceclient && v->voiceclient->is_ready()) {
+					good_embed(command_handler, src, "⏯️ Leaving voice...");
+					bot.get_shard(0)->disconnect_voice(src.guild_id);
+				} else {
+					bad_embed(command_handler, src, "⚠️ I'm on no voice channel...");
+				}
+			},
+			"Stop playing, clear queue and leave voice channel",
+			home_server
+		);
+
+		command_handler.add_command(
+			"play",
+			{ {"song", dpp::param_info(dpp::pt_string, false, "Song Name") } },
+			[&](const std::string& command, const dpp::parameter_list_t& parameters, dpp::command_source src) {
+				song_to_load = trim(std::get<std::string>(parameters[0].second));
+				last_ch_id = src.channel_id;
+				dpp::voiceconn* v = bot.get_shard(0)->get_voice(src.guild_id);
+				if (v && v->voiceclient && v->voiceclient->is_ready()) {
+					start_play(v->voiceclient, bot, &command_handler, &src);
+				} else {
+					dpp::guild * g = dpp::find_guild(src.guild_id);
+					if (!g->connect_member_voice(src.issuer->id)) {
+						bad_embed(command_handler, src, "🔇 You don't seem to be on a voice channel! :(");
+					} else {
+						good_embed(command_handler, src, "🔈 Connecting to voice...");
+					}
+				}
+			},
+			"Play a song",
+			home_server
+		);
+
+		command_handler.add_command(
+			"search",
+			{ {"query", dpp::param_info(dpp::pt_string, false, "Search query (wildcard)") } },
+			[&](const std::string& command, const dpp::parameter_list_t& parameters, dpp::command_source src) {
+				std::string search = trim(std::get<std::string>(parameters[0].second));
+				std::string matches = "__**Search Results:**__\n\n";
+				
+				std::ifstream file("songindex.txt");
+				std::replace(search.begin(), search.end(), ' ', '*');
+				search = "*" + search + "*";
+				bool found_any = false;
+				if (file.is_open()) {
+					std::string line;
+					bot.log(dpp::ll_debug, fmt::format("Searching for: '{}'", search));
+					while (std::getline(file, line)) {
+						if (match(line.c_str(), search.c_str())) {
+							bot.log(dpp::ll_debug, fmt::format("Search match: {}", line));
+							char filename_part[1024];
+							strncpy(filename_part, line.c_str(), 1023);
+							for (char* v = filename_part; *v; ++v) {
+								if (*v == '_') {
+									*v = ' ';
+								}
+							}
+							filename_part[line.length() - 4] = '\0';
+							if (matches.length() < 2048) {
+								matches += "🎵 " + std::string(basename(filename_part)) + "\n";
+							} else {
+								break;
+							}
+							found_any = true;
+						}
+					}
+					file.close();
+				}
+				if (!found_any) {
+					bad_embed(command_handler, src, "⚠️ I don't have any songs at all that look like that.");
+				} else {
+					good_embed(command_handler, src, matches);
+				}
+			},
+			"Search for a song",
+			home_server
+		);
+
 	});
 
 	bot.on_voice_track_marker([&](const dpp::voice_track_marker_t &ev) {
 		std::string song = ev.track_meta;
-		bot.message_create(dpp::message(last_ch_id, "Now Playing: " + song));
+		good_embed(bot, last_ch_id, "⏯️ Now Playing: " + song);
 		current_song = song;
 	});
 
