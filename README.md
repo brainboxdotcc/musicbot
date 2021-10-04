@@ -30,5 +30,5 @@ You should then make a file called `songindex.txt` within the mp3 directory whic
 Start the bot:
 
     cd build
-    ./templatebot
+    ./musicbot
 
