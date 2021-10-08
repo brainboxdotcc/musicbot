@@ -283,6 +283,8 @@ int main(int argc, char const *argv[])
 			home_server
 		);
 
+		command_handler.register_commands();
+
 	});
 
 	bot.on_voice_track_marker([&](const dpp::voice_track_marker_t &ev) {
@@ -297,7 +299,7 @@ int main(int argc, char const *argv[])
 			start_play(v, bot);
 		}
 	});
-
+	
 	bot.on_log([](const dpp::log_t & event) {
 		if (event.severity > dpp::ll_trace) {
 			std::cout << "[" << dpp::utility::loglevel(event.severity) << "] " << event.message << "\n";
@@ -305,7 +307,24 @@ int main(int argc, char const *argv[])
 	});
 
 	/* Start bot */
-	bot.start(false);
+	bot.start(true);
+
+	while (true) {
+		std::this_thread::sleep_for(std::chrono::seconds(60));
+
+		dpp::discord_client* shard = bot.get_shard(0);
+		dpp::channel* c = dpp::find_channel(last_ch_id);
+
+		if (shard) {
+			dpp::voiceconn* vc = shard->get_voice(c->guild_id);
+			if (vc && vc->is_active() && vc->is_ready() && vc->voiceclient) {
+				if (!encode_thread_active && vc->voiceclient->get_tracks_remaining() == 0) {
+					good_embed(bot, last_ch_id, "⏯️ Leaving voice...");
+					shard->disconnect_voice(c->guild_id);
+				}
+			}
+		}
+	}
 
 	return 0;
 }
