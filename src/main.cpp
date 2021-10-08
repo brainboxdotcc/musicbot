@@ -315,7 +315,7 @@ int main(int argc, char const *argv[])
 		dpp::discord_client* shard = bot.get_shard(0);
 		dpp::channel* c = dpp::find_channel(last_ch_id);
 
-		if (shard) {
+		if (shard && c) {
 			dpp::voiceconn* vc = shard->get_voice(c->guild_id);
 			if (vc && vc->is_active() && vc->is_ready() && vc->voiceclient) {
 				if (!encode_thread_active && vc->voiceclient->get_tracks_remaining() == 0) {
