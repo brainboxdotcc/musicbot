@@ -227,7 +227,7 @@ int main(int argc, char const *argv[])
 					start_play(v->voiceclient, bot, &command_handler, &src);
 				} else {
 					dpp::guild * g = dpp::find_guild(src.guild_id);
-					if (!g->connect_member_voice(src.issuer->id)) {
+					if (!g->connect_member_voice(src.issuer.id)) {
 						bad_embed(command_handler, src, "🔇 You don't seem to be on a voice channel! :(");
 					} else {
 						good_embed(command_handler, src, "🔈 Connecting to voice...");
@@ -305,6 +305,8 @@ int main(int argc, char const *argv[])
 			std::cout << "[" << dpp::utility::loglevel(event.severity) << "] " << event.message << "\n";
 		}
 	});
+
+	bot.set_websocket_protocol(dpp::ws_etf);
 
 	/* Start bot */
 	bot.start(true);
