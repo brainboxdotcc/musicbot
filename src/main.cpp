@@ -59,11 +59,15 @@ std::string current_song;
 
 void start_play(dpp::discord_voice_client* v, dpp::cluster &bot, dpp::commandhandler* ch = nullptr, dpp::command_source* src = nullptr)
 {
-	dpp::command_source s;
+	dpp::interaction_create_t ev(v, "");
+	dpp::command_source s(ev);
 	bool command = false;
 	if (ch && src) {
 		command = true;
-		s = *src;
+		s.guild_id = src->guild_id;
+		s.channel_id = src->channel_id;
+		s.command_id = src->command_id;
+		s.command_token = src->command_token;
 	}
 	std::ifstream file("songindex.txt");
 	std::string search = song_to_load;
