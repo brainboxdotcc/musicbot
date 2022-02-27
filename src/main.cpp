@@ -59,7 +59,7 @@ std::string current_song;
 
 void start_play(dpp::discord_voice_client* v, dpp::cluster &bot, dpp::commandhandler* ch = nullptr, dpp::command_source* src = nullptr)
 {
-	dpp::interaction_create_t ev(v, "");
+	dpp::interaction_create_t ev(nullptr, "");
 	dpp::command_source s(ev);
 	bool command = false;
 	if (ch && src) {
