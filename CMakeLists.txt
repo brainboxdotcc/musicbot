@@ -19,6 +19,7 @@ set_target_properties(${BOT_NAME} PROPERTIES
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 find_package(Threads REQUIRED)
 find_package(DPP REQUIRED)
+find_package(fmt REQUIRED)
 if(APPLE)
 	set(OPENSSL_ROOT_DIR /usr/local/opt/openssl)
 	find_package(OpenSSL REQUIRED)
@@ -35,6 +36,7 @@ target_include_directories(${BOT_NAME} PUBLIC
 
 target_link_libraries(${BOT_NAME}
     dl
+    fmt
     mpg123
     ${CMAKE_THREAD_LIBS_INIT}
     ${DPP_LIBRARIES}
