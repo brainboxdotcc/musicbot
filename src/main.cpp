@@ -1,6 +1,5 @@
 #include <dpp/dpp.h>
 #include <dpp/nlohmann/json.hpp>
-#include <dpp/fmt/format.h>
 #include <iomanip>
 #include <sstream>
 
@@ -103,24 +102,20 @@ void start_play(dpp::discord_voice_client* v, dpp::cluster &bot, dpp::commandhan
 				good_embed(*ch, s, "⌛ Enqueued: " + std::string(basename(filename_part)));
 			else
 				good_embed(bot, last_ch_id, "⌛ Enqueued: " + std::string(basename(filename_part)));
-			bot.log(dpp::ll_info, fmt::format("Begin mp3 decode of file: {}", std::string(basename(filename_part))));
+			bot.log(dpp::ll_info, "Begin mp3 decode of file: " + std::string(basename(filename_part)));
 			double mp3_start = dpp::utility::time_f();
 			std::vector<uint8_t> pcmdata = get_song(load_this);
 			double mp3_end = dpp::utility::time_f();
-			bot.log(dpp::ll_info, fmt::format("End mp3 decode of file: {} [{:.02f} seconds]", std::string(basename(filename_part)), mp3_end - mp3_start));
 			if (encode_thread_active) {
-				bot.log(dpp::ll_info, fmt::format("Waiting for opus to finish..."));
 				while(encode_thread_active) {
 					std::this_thread::sleep_for(std::chrono::seconds(1));
 				}
 			}
 			encode_thread_active = true;
-			bot.log(dpp::ll_info, fmt::format("Begin opus encode of file: {}", std::string(basename(filename_part))));
 			double opus_start = dpp::utility::time_f();
 			v->insert_marker(std::string(basename(filename_part)));
 			v->send_audio_raw((uint16_t*)pcmdata.data(), pcmdata.size());
 			double opus_end = dpp::utility::time_f();
-			bot.log(dpp::ll_info, fmt::format("End opus encode of file: {} [{:.02f} seconds]", std::string(basename(filename_part)), opus_end - opus_start));
 			encode_thread_active = false;
 
 		});
@@ -255,10 +250,8 @@ int main(int argc, char const *argv[])
 				bool found_any = false;
 				if (file.is_open()) {
 					std::string line;
-					bot.log(dpp::ll_debug, fmt::format("Searching for: '{}'", search));
 					while (std::getline(file, line)) {
 						if (match(line.c_str(), search.c_str())) {
-							bot.log(dpp::ll_debug, fmt::format("Search match: {}", line));
 							char filename_part[1024];
 							strncpy(filename_part, line.c_str(), 1023);
 							for (char* v = filename_part; *v; ++v) {
