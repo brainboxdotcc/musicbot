@@ -135,7 +135,7 @@ int main(int argc, char const *argv[])
         json configdocument;
         std::ifstream configfile("../config.json");
         configfile >> configdocument;
-        dpp::cluster bot(configdocument["token"]);
+        dpp::cluster bot(configdocument["token"], dpp::i_default_intents | dpp::i_message_content);
 
 	dpp::snowflake home_server = std::stoull(configdocument["homeserver"].get<std::string>());
 
