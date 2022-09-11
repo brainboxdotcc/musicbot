@@ -1,11 +1,10 @@
 #include <dpp/dpp.h>
-#include <fmt/format.h>
 
 void embed(dpp::cluster &bot, uint32_t colour, dpp::snowflake channel_id, const std::string &message) {
 	bot.message_create(dpp::message(channel_id, "").add_embed(dpp::embed().set_description(message).set_title("Pickle Rick!").set_color(colour))
 	, [&](const dpp::confirmation_callback_t &callback) {
 		if (callback.is_error()) {
-			bot.log(dpp::ll_error, fmt::format("Failed to send message: {}", callback.http_info.body));
+			bot.log(dpp::ll_error, "Failed to send message: " + callback.http_info.body);
 		}
 	});
 }
